@@ -13,6 +13,8 @@ void main() async{
 }
 
 class InventoryApp extends StatelessWidget {
+  const InventoryApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -26,7 +28,7 @@ class InventoryApp extends StatelessWidget {
 }
 
 class InventoryHomePage extends StatefulWidget {
-  InventoryHomePage({Key key, this.title}) : super(key: key);
+  const InventoryHomePage({super.key, required this.title});
   final String title;
 
   @override
@@ -34,32 +36,169 @@ class InventoryHomePage extends StatefulWidget {
 }
 
 class _InventoryHomePageState extends State<InventoryHomePage> {
-  // TODO: Implement Firestore integration
+  final CollectionReference inventory = 
+      FirebaseFirestore.instance.collection('inventory');
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Color(0xFFD0E1F9),
       appBar: AppBar(
         title: Text(widget.title),
+        backgroundColor: Color(0xFFF9D6E1),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'Inventory Management System',
-            ),
-            // TODO: Implement inventory list view
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // TODO: Implement add inventory item
+      body: StreamBuilder(
+        stream: inventory.snapshots(),
+        builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text("Error fetching data"));
+          }
+
+          final items = snapshot.data?.docs ?? [];
+          return ListView.builder(
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              var item = items[index];
+              return ListTile(
+                title: Text(item['name']),
+                subtitle: Text("Quantity: ${item['quantity']}"),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.edit),
+                      onPressed: () => _editItem(context, item),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.delete, color: Colors.red),
+                      onPressed: () => _deleteItem(item.id),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
         },
-        tooltip: 'Add Item',
-        child: Icon(Icons.add),
       ),
+      bottomNavigationBar: Padding(
+  padding: const EdgeInsets.all(16.0),
+  child: TextButton(
+    onPressed: () => _addItem(context),
+    style: TextButton.styleFrom(
+      backgroundColor: Colors.blue, // Button background color
+      padding: EdgeInsets.symmetric(vertical: 12.0), // Button padding
+    ),
+    child: Text(
+      "Add Item",
+      style: TextStyle(color: Colors.white, fontSize: 18), // Text color & size
+    ),
+  ),
+),
     );
   }
+
+  void _deleteItem(String id) {
+    inventory.doc(id).delete();
+  }
+
+  void _editItem(BuildContext context, QueryDocumentSnapshot item) {
+  TextEditingController nameController = 
+      TextEditingController(text: item['name']);
+  TextEditingController quantityController = 
+      TextEditingController(text: item['quantity'].toString());
+
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text("Edit Item"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: InputDecoration(labelText: "Item Name"),
+            ),
+            TextField(
+              controller: quantityController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: "Quantity"),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+              if (nameController.text.isNotEmpty &&
+                  quantityController.text.isNotEmpty) {
+                inventory.doc(item.id).update({
+                  'name': nameController.text,
+                  'quantity': int.parse(quantityController.text),
+                });
+                Navigator.pop(context);
+              }
+            },
+            child: Text("Update"),
+          ),
+        ],
+      );
+    },
+  );
 }
+
+void _addItem(BuildContext context) {
+  TextEditingController nameController = TextEditingController();
+  TextEditingController quantityController = TextEditingController();
+
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text("Add Item"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: InputDecoration(labelText: "Item Name"),
+            ),
+            TextField(
+              controller: quantityController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: "Quantity"),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+              if (nameController.text.isNotEmpty && 
+                  quantityController.text.isNotEmpty) {
+                inventory.add({
+                  'name': nameController.text,
+                  'quantity': int.parse(quantityController.text),
+                });
+                Navigator.pop(context);
+              }
+            },
+            child: Text("Add"),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+}
+
